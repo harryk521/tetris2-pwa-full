@@ -1,0 +1,23 @@
+{
+  "name": "Tetris (Mobile Web)",
+  "short_name": "Tetris",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0a0b0d",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "description": "A mobile-optimized HTML5 Tetris with hold, pause, sound, and touch controls."
+}
