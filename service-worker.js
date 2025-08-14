@@ -1,5 +1,6 @@
 // service-worker.js (icons INCLUDED, subpath-safe)
-const CACHE_NAME = 'tetris-v1';
+- const CACHE_NAME = 'tetris-v1';
++ const CACHE_NAME = 'tetris-v2';  // ← 버전 올림
 const ASSETS = [
   './',
   './index.html',
