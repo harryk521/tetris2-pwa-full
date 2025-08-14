@@ -1,5 +1,5 @@
 // service-worker.js
-const CACHE_NAME = 'tetris-v3'; // 버전 올리기
+const CACHE_NAME = 'tetris-v4'; // 버전 올리기
 const ASSETS = [
   './',
   './index.html',
