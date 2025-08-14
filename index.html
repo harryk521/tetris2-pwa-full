@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="theme-color" content="#0a0b0d">
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="manifest.json?v=2"><!-- subpath-safe & cache-bust -->
 <title>Tetris – Full (Hold + Pause + Sound)</title>
 <style>
   :root { --bg:#ffffff; --panel:#15161a; --ink:#0b0b0f; --muted:#586174; --board:#0a0b0d; }
@@ -142,7 +142,7 @@
   const PIECES=Object.keys(SHAPES);
 
   // ====== STATE ======
-  let board=Array.from({length:ROWS},()=>Array(COLS).fill(null));
+  let board=Array.from({length:ROWS},()=>Array(COLS).fill(null)); // 빈칸은 null
   let queue=[], hold=null, canHold=true;
   let cur=null;
   let score=0, lines=0, level=0;
@@ -173,7 +173,7 @@
   const overlaySub=document.getElementById('overlay-sub');
   const overlayBtn=document.getElementById('overlay-btn');
 
-  // ====== CANVAS SCAFFOLD ======
+  // ====== CANVAS ======
   function setupCanvas(canvas,wBlocks,hBlocks,size){
     const dpr=Math.max(1,Math.floor(window.devicePixelRatio||1));
     canvas.width=wBlocks*size*dpr; canvas.height=hBlocks*size*dpr;
@@ -196,19 +196,45 @@
     SIZE_REF.value=block; ctx=setupCanvas(boardCanvas,COLS,VISIBLE_ROWS,block); drawAll();
   }
 
-  // ====== LOGIC ======
+  // ====== HELPERS & CORE LOGIC ======
   const inBounds=(x,y)=>x>=0&&x<COLS&&y>=0&&y<ROWS;
+
+  // 빈칸은 null만 허용
   function canPlace(t,x,y,r){
-    for(const [dx,dy] of SHAPES[t][r]){ const px=x+dx, py=y+dy;
-      if(!inBounds(px,py) || board[py][px]!=null) return false;
-    } return true;
+    for(const [dx,dy] of SHAPES[t][r]){
+      const px=x+dx, py=y+dy;
+      if(!inBounds(px,py) || board[py][px] !== null) return false;
+    }
+    return true;
   }
-  function merge(t,x,y,r){ for(const [dx,dy] of SHAPES[t][r]){ const px=x+dx, py=y+dy; if(inBounds(px,py)) board[py][px]=COLORS[t]; } }
-  function isRowFull(row){ for(let x=0;x<COLS;x++){ if(row[x]==null) return false; } return true; }
+
+  function merge(t,x,y,r){
+    for(const [dx,dy] of SHAPES[t][r]){
+      const px=x+dx, py=y+dy;
+      if(inBounds(px,py)) board[py][px]=COLORS[t]; // 색상 문자열 저장
+    }
+  }
+
+  // 하나라도 null이면 가득찬 행이 아님
+  function isRowFull(row){
+    for(let x=0;x<COLS;x++){ if(row[x]===null) return false; }
+    return true;
+  }
+
+  // 아래→위 스캔, 길이 유지 보장
   function clearLines(){
-    let cleared=0; for(let y=ROWS-1;y>=0;y--){ if(isRowFull(board[y])){ board.splice(y,1); board.unshift(Array(COLS).fill(null)); cleared++; y++; } }
+    let cleared=0;
+    for(let y=ROWS-1;y>=0;y--){
+      if(isRowFull(board[y])){
+        board.splice(y,1);
+        board.unshift(Array(COLS).fill(null));
+        cleared++;
+        y++; // 당겨온 새 행을 같은 y에서 재검사
+      }
+    }
     return cleared;
   }
+
   const levelFromLines=t=>Math.floor(t/10);
   const intervalFromLevel=l=>Math.max(MIN_INTERVAL, 800 - l*70);
   function getDropY(t,x,y,r){ while(canPlace(t,x,y+1,r)) y++; return y; }
@@ -220,6 +246,7 @@
     fillQueue(); const t=type||queue.shift(); cur={type:t,x:3,y:0,r:0}; canHold=true;
     if(!canPlace(cur.type,cur.x,cur.y,cur.r)){ running=false; gameOver=true; showOverlay('Game Over',`Score: ${score}`,'Restart'); AudioFX.chord([160,120],0.25,'sawtooth'); drawAll(); }
   }
+
   function holdPiece(){
     if(!canHold||!cur) return; canHold=false;
     if(hold){ const tmp=hold; hold=cur.type; cur={type:tmp,x:3,y:0,r:0};
@@ -244,10 +271,12 @@
     ctx.fillStyle='rgba(255,255,255,.12)'; ctx.fillRect(x*size+pad,y*size+pad,size-pad*2,3);
     ctx.fillStyle='rgba(0,0,0,.2)'; ctx.fillRect(x*size+pad,y*size+size-3-pad,size-pad*2,3);
   }
+
   function drawBoard(){
     const SIZE=SIZE_REF.value; ctx.clearRect(0,0,boardCanvas.width,boardCanvas.height);
     for(let y=ROWS-VISIBLE_ROWS, vy=0; y<ROWS; y++,vy++){
-      for(let x=0;x<COLS;x++){ const c=board[y][x];
+      for(let x=0;x<COLS;x++){
+        const c=board[y][x];
         if(c) drawCell(ctx,x,vy,c,SIZE);
         else { ctx.fillStyle='#0f1115'; ctx.fillRect(x*SIZE+1, vy*SIZE+1, SIZE-2, SIZE-2); }
       }
@@ -258,21 +287,25 @@
       for(const [dx,dy] of SHAPES[cur.type][cur.r]){ const x=cur.x+dx, y=cur.y+dy; if(y>=ROWS-VISIBLE_ROWS) drawCell(ctx,x,y-(ROWS-VISIBLE_ROWS),COLORS[cur.type],SIZE); }
     }
   }
+
   function drawSide(){
     const cellSize=16; nctx.clearRect(0,0,nextCanvas.width,nextCanvas.height); let yOff=0; fillQueue();
-    for(let i=0;i<Math.min(5,queue.length);i++){ const k=queue[i], shape=SHAPES[k][0];
+    for(let i=0;i<Math.min(5,queue.length);i++){
+      const k=queue[i], shape=SHAPES[k][0];
       let minX=99,minY=99,maxX=-99,maxY=-99;
       for(const [x,y] of shape){ minX=Math.min(minX,x); minY=Math.min(minY,y); maxX=Math.max(maxX,x); maxY=Math.max(maxY,y); }
       const w=maxX-minX+1, h=maxY-minY+1; const ox=Math.floor((6-w)/2)-minX, oy=Math.floor((3-h)/2)-minY;
       nctx.fillStyle='#0f1115'; nctx.fillRect(0,yOff*cellSize,6*cellSize,3*cellSize);
-      for(const [x,y] of shape){ const pad=1, rx=(x+ox)*cellSize+pad, ry=(y+oy+yOff*1)*cellSize+pad;
+      for(const [x,y] of shape){
+        const pad=1, rx=(x+ox)*cellSize+pad, ry=(y+oy+yOff*1)*cellSize+pad;
         nctx.fillStyle=COLORS[k]; nctx.fillRect(rx,ry,cellSize-pad*2,cellSize-pad*2);
         nctx.fillStyle='rgba(255,255,255,.12)'; nctx.fillRect(rx,ry,cellSize-pad*2,3);
         nctx.fillStyle='rgba(0,0,0,.2)'; nctx.fillRect(rx,ry+cellSize-3,cellSize-pad*2,3);
       } yOff+=3.2;
     }
     hctx.clearRect(0,0,holdCanvas.width,holdCanvas.height);
-    if(hold){ const shape=SHAPES[hold][0]; let minX=99,minY=99,maxX=-99,maxY=-99;
+    if(hold){
+      const shape=SHAPES[hold][0]; let minX=99,minY=99,maxX=-99,maxY=-99;
       for(const [x,y] of shape){ minX=Math.min(minX,x); minY=Math.min(minY,y); maxX=Math.max(maxX,x); maxY=Math.max(maxY,y); }
       const w=maxX-minX+1,h=maxY-minY+1, ox=Math.floor((6-w)/2)-minX, oy=Math.floor((5-h)/2)-minY;
       for(const [x,y] of shape){ drawCell(hctx,x+ox,y+oy,COLORS[hold],16); }
@@ -280,13 +313,13 @@
   }
   function drawAll(){ drawBoard(); drawSide(); }
 
-  // ====== OVERLAY/PAUSE ======
+  // ====== OVERLAY / PAUSE ======
   function showOverlay(t,s,b){ overlayTitle.textContent=t; overlaySub.textContent=s||''; overlayBtn.textContent=b||'OK'; overlay.style.display='grid'; }
   function hideOverlay(){ overlay.style.display='none'; }
   function pauseToggle(){ if(gameOver) return; running=!running; if(!running){ showOverlay('Paused','Tap resume','Resume'); AudioFX.beep(280,0.08,'sine'); } else { hideOverlay(); AudioFX.beep(560,0.08,'sine'); } }
   overlayBtn.addEventListener('click',()=>{ if(gameOver) reset(); else pauseToggle(); });
 
-  // ====== CONTROLS ======
+  // ====== INPUT ======
   function rotate(dir){
     const nr=(cur.r+(dir===1?1:3))%4;
     const kicks=[[0,0],[1,0],[-1,0],[2,0],[-2,0],[0,-1],[1,-1],[-1,-1]];
@@ -299,19 +332,26 @@
   function softDrop(){ if(canPlace(cur.type,cur.x,cur.y+1,cur.r)){ cur.y++; AudioFX.beep(220,0.03,'sine'); } else lock(); }
   function move(dx){ if(canPlace(cur.type,cur.x+dx,cur.y,cur.r)){ cur.x+=dx; AudioFX.beep(360,0.03,'sine'); } }
 
+  // ====== LOCK → CLEAR → SCORE/LEVEL → SPAWN ======
   function lock(){
     merge(cur.type,cur.x,cur.y,cur.r);
+
     const beforeLevel=level;
     const cleared=clearLines();
     if(cleared>0){
-      score += LINE_SCORES[cleared]*(1+level*0.1);
-      lines += cleared; level = levelFromLines(lines); dropInterval=intervalFromLevel(level);
+      score += LINE_SCORES[cleared]*(1 + level*0.1);
+      lines += cleared;
+      level = levelFromLines(lines);
+      dropInterval = intervalFromLevel(level);
       updateStats();
       const chords={1:[523],2:[523,659],3:[659,784],4:[523,659,784]}; AudioFX.chord(chords[cleared]||[523],0.09,'sine');
       if(level>beforeLevel) AudioFX.sweep(440,880,0.18,'triangle');
       tryVibrate(20);
     }
-    spawn(); drawSide(); drawBoard();
+
+    spawn();
+    drawSide();
+    drawBoard();
   }
 
   document.addEventListener('keydown',e=>{
@@ -361,7 +401,7 @@
 
   function tryVibrate(ms){ if(navigator.vibrate) navigator.vibrate(ms); }
 
-  // Gestures
+  // Gestures on board
   let tSX=0,tSY=0,tST=0,moved=false;
   boardCanvas.addEventListener('touchstart',e=>{
     if(!running||gameOver) return;
@@ -404,9 +444,9 @@
   window.addEventListener('resize',fitBoard,{passive:true}); fitBoard();
   hookAudioOnce(); updateMuteUI();
 
-  // SW register (subpath-safe)
+  // Service Worker (subpath-safe + cache-bust)
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js'));
+    window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js?v=2'));
   }
 })();
 </script>
